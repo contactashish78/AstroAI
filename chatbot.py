@@ -60,19 +60,22 @@ class WebChatbot:
         try:
             context = self._prepare_context()
             
+            # Start with system message
             messages = [
                 {
                     "role": "system",
                     "content": "You are a helpful assistant that answers questions based on website content provided to you. Use only the information from the websites to answer questions. If the information is not available in the provided content, say so clearly."
-                },
-                {
-                    "role": "user",
-                    "content": f"{context}\n\nQuestion: {question}"
                 }
             ]
             
-            # Add conversation history (avoid duplicating the current question)
-            messages.extend(self.conversation_history[-6:])  # Keep last 6 messages
+            # Add conversation history BEFORE the current question (keep last 6 messages)
+            messages.extend(self.conversation_history[-6:])
+            
+            # Add the current question with context
+            messages.append({
+                "role": "user",
+                "content": f"{context}\n\nQuestion: {question}"
+            })
             
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
@@ -83,7 +86,7 @@ class WebChatbot:
             
             answer = response.choices[0].message.content
             
-            # Update conversation history
+            # Update conversation history AFTER getting the response
             self.conversation_history.append({"role": "user", "content": question})
             self.conversation_history.append({"role": "assistant", "content": answer})
             
@@ -101,3 +104,48 @@ class WebChatbot:
     def clear_history(self):
         """Clear conversation history"""
         self.conversation_history = []
+    
+    def test_conversation_flow(self) -> bool:
+        """Test method to verify conversation flow works without loops"""
+        try:
+            # Save current state
+            original_history = self.conversation_history.copy()
+            original_content = self.scraped_content.copy()
+            
+            # Set test content
+            test_content = [{
+                'url': 'https://test.com',
+                'title': 'Test Page',
+                'content': 'This is a test page about Python programming.',
+                'status': 'success'
+            }]
+            self.add_scraped_content(test_content)
+            
+            # Clear history for clean test
+            self.conversation_history = []
+            
+            # Test sequence of questions
+            q1 = "What is this page about?"
+            a1 = self.ask_question(q1)
+            
+            q2 = "What programming language is mentioned?"
+            a2 = self.ask_question(q2)
+            
+            # Verify no loops (answers should be different and not repeat questions)
+            test_passed = (
+                len(self.conversation_history) == 4 and  # 2 questions + 2 answers
+                q1 not in a1 and  # Answer doesn't repeat the question
+                q2 not in a2 and  # Answer doesn't repeat the question
+                a1 != a2 and  # Answers are different
+                not a1.startswith("❌")  # No error messages
+            )
+            
+            # Restore original state
+            self.conversation_history = original_history
+            self.scraped_content = original_content
+            
+            return test_passed
+            
+        except Exception as e:
+            print(f"Test failed with error: {e}")
+            return False

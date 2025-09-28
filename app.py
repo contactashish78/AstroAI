@@ -483,8 +483,15 @@ with st.sidebar:
     
     # OpenAI API Key input
     st.markdown("#### 🔑 OpenAI API Configuration")
+    # Try to get API key from Streamlit secrets first, then environment
+    default_api_key = ""
+    try:
+        default_api_key = st.secrets["OPENAI_API_KEY"]
+    except:
+        default_api_key = os.getenv('OPENAI_API_KEY', '')
+    
     api_key = st.text_input("API Key", type="password", 
-                           value=os.getenv('OPENAI_API_KEY', ''),
+                           value=default_api_key,
                            help="Get your API key from https://platform.openai.com/account/api-keys",
                            placeholder="sk-...")
     

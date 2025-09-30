@@ -320,153 +320,7 @@ if 'api_key_valid' not in st.session_state:
     st.session_state.api_key_valid = False
 
 # Custom CSS for professional styling
-st.markdown("""
-<style>
-    /* Main theme colors */
-    :root {
-        --primary-color: #2E86AB;
-        --secondary-color: #A23B72;
-        --accent-color: #F18F01;
-        --background-color: #FFFFFF;
-        --text-color: #2C3E50;
-        --light-gray: #F8F9FA;
-        --border-color: #E1E8ED;
-    }
-    
-    /* Header styling */
-    .main-header {
-        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-        padding: 2rem 1rem;
-        border-radius: 10px;
-        margin-bottom: 2rem;
-        color: white;
-        text-align: center;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-    
-    .main-header h1 {
-        margin: 0;
-        font-size: 2.5rem;
-        font-weight: 700;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-    }
-    
-    .main-header p {
-        margin: 0.5rem 0 0 0;
-        font-size: 1.2rem;
-        opacity: 0.9;
-    }
-    
-    /* Card styling */
-    .info-card {
-        background: var(--light-gray);
-        padding: 1.5rem;
-        border-radius: 10px;
-        border-left: 4px solid var(--primary-color);
-        margin: 1rem 0;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    }
-    
-    .success-card {
-        background: #D4EDDA;
-        border-left-color: #28A745;
-        color: #155724;
-    }
-    
-    .warning-card {
-        background: #FFF3CD;
-        border-left-color: #FFC107;
-        color: #856404;
-    }
-    
-    .error-card {
-        background: #F8D7DA;
-        border-left-color: #DC3545;
-        color: #721C24;
-    }
-    
-    /* Button styling */
-    .stButton > button {
-        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 0.75rem 1.5rem;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    }
-    
-    /* Sidebar styling */
-    .css-1d391kg {
-        background-color: var(--light-gray);
-    }
-    
-    /* Expander styling */
-    .streamlit-expanderHeader {
-        background-color: var(--light-gray);
-        border-radius: 8px;
-        border: 1px solid var(--border-color);
-    }
-    
-    /* Chat message styling */
-    .chat-message {
-        padding: 1rem;
-        margin: 0.5rem 0;
-        border-radius: 10px;
-        border-left: 4px solid var(--accent-color);
-        background: var(--light-gray);
-    }
-    
-    .user-message {
-        border-left-color: var(--primary-color);
-        background: #E3F2FD;
-    }
-    
-    .ai-message {
-        border-left-color: var(--secondary-color);
-        background: #F3E5F5;
-    }
-    
-    /* Stats styling */
-    .stats-container {
-        display: flex;
-        justify-content: space-around;
-        margin: 1rem 0;
-    }
-    
-    .stat-item {
-        text-align: center;
-        padding: 1rem;
-        background: var(--light-gray);
-        border-radius: 8px;
-        border: 1px solid var(--border-color);
-        min-width: 120px;
-    }
-    
-    .stat-number {
-        font-size: 2rem;
-        font-weight: bold;
-        color: var(--primary-color);
-    }
-    
-    .stat-label {
-        font-size: 0.9rem;
-        color: var(--text-color);
-        opacity: 0.8;
-    }
-    
-    /* Hide Streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-</style>
-""", unsafe_allow_html=True)
+## Removed conflicting light-theme CSS to ensure dark theme readability
 
 # Professional header
 st.markdown("""
@@ -756,12 +610,12 @@ with col2:
 # Professional footer
 st.markdown("---")
 st.markdown("""
-<div style="text-align: center; padding: 2rem; color: #666; background: #f8f9fa; border-radius: 10px; margin-top: 2rem;">
-    <h4 style="margin: 0; color: #2E86AB;">Web Intelligence Assistant</h4>
+<div style="text-align: center; padding: 2rem; color: #e2e8f0; background: #1f2937; border-radius: 10px; margin-top: 2rem; border: 1px solid #374151;">
+    <h4 style="margin: 0; color: #63b3ed;">Web Intelligence Assistant</h4>
     <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">
         Powered by OpenAI GPT • Built with Streamlit • Web Scraping with BeautifulSoup
     </p>
-    <p style="margin: 0.5rem 0 0 0; font-size: 0.8rem; opacity: 0.7;">
+    <p style="margin: 0.5rem 0 0 0; font-size: 0.8rem; opacity: 0.8;">
         Professional web content analysis and AI-powered insights
     </p>
 </div>

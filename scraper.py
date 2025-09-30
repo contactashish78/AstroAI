@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlunparse, parse_qsl, urlencode
 import time
 from typing import Dict, List, Optional, Set
 import urllib3
@@ -20,10 +20,59 @@ class WebScraper:
         self.visited_urls: Set[str] = set()
         self.scraped_count = 0
     
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URLs for consistent comparison and storage.
+        - Lowercase scheme and host
+        - Remove fragment
+        - Remove default ports
+        - Strip common tracking query params
+        - Remove trailing slash (except root)
+        """
+        try:
+            parsed = urlparse(url)
+            scheme = parsed.scheme.lower()
+            hostname = (parsed.hostname or '').lower()
+            # Drop leading www. for same-site comparisons
+            hostname = hostname.lstrip('www.')
+            port = parsed.port
+            # Remove default ports
+            netloc = hostname
+            if port and not ((scheme == 'http' and port == 80) or (scheme == 'https' and port == 443)):
+                netloc = f"{hostname}:{port}"
+
+            # Clean query: drop tracking params
+            query_pairs = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True)]
+            drop_keys = {'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'fbclid'}
+            cleaned_pairs = [(k, v) for k, v in query_pairs if k.lower() not in drop_keys]
+            # Keep original order
+            query = urlencode(cleaned_pairs)
+
+            # Remove fragment
+            fragment = ''
+
+            # Normalize path: remove trailing slash except root
+            path = parsed.path or '/'
+            if len(path) > 1 and path.endswith('/'):
+                path = path.rstrip('/')
+
+            normalized = urlunparse((scheme, netloc, path, '', query, fragment))
+            return normalized
+        except Exception:
+            return url
+
+    def _is_same_site(self, url: str, base_url: str) -> bool:
+        """Heuristic same-site check tolerant of www and subdomains."""
+        a = urlparse(url)
+        b = urlparse(base_url)
+        host_a = (a.hostname or '').lower().lstrip('www.')
+        host_b = (b.hostname or '').lower().lstrip('www.')
+        return host_a == host_b
+    
     def scrape_url(self, url: str, extract_links: bool = False) -> Dict[str, str]:
         """Scrape content from a single URL"""
         try:
-            response = self.session.get(url, timeout=10, verify=False)
+            normalized_url = self._normalize_url(url)
+            response = self.session.get(normalized_url, timeout=10, verify=False)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -49,7 +98,7 @@ class WebScraper:
             content = ' '.join(chunk for chunk in chunks if chunk)
             
             result = {
-                'url': url,
+                'url': normalized_url,
                 'title': title_text,
                 'content': content[:10000],  # Limit content length
                 'status': 'success'
@@ -62,7 +111,7 @@ class WebScraper:
             
         except Exception as e:
             return {
-                'url': url,
+                'url': self._normalize_url(url),
                 'title': '',
                 'content': '',
                 'status': f'error: {str(e)}',
@@ -72,7 +121,8 @@ class WebScraper:
     def _extract_links(self, soup: BeautifulSoup, base_url: str) -> List[str]:
         """Extract and normalize links from a page"""
         links = []
-        base_domain = urlparse(base_url).netloc
+        base_domain = urlparse(base_url).hostname or ''
+        base_domain = base_domain.lower().lstrip('www.')
         
         # Extract from various link sources
         link_selectors = [
@@ -87,16 +137,16 @@ class WebScraper:
                 if not href:
                     continue
                     
-                # Convert relative URLs to absolute
-                full_url = urljoin(base_url, href)
-                parsed_url = urlparse(full_url)
+                # Convert relative URLs to absolute and normalize
+                candidate = self._normalize_url(urljoin(base_url, href))
+                parsed_url = urlparse(candidate)
                 
-                # Only include HTTP/HTTPS links from the same domain
+                # Only include HTTP/HTTPS links from the same site
                 if (parsed_url.scheme in ['http', 'https'] and 
-                    parsed_url.netloc == base_domain and
-                    full_url not in self.visited_urls and
-                    self._is_valid_link(full_url)):
-                    links.append(full_url)
+                    self._is_same_site(candidate, base_url) and
+                    candidate not in self.visited_urls and
+                    self._is_valid_link(candidate)):
+                    links.append(candidate)
         
         # Also look for links in navigation menus, content areas
         nav_links = soup.select('nav a[href], .menu a[href], .navigation a[href], .nav a[href]')
@@ -106,14 +156,14 @@ class WebScraper:
             for link in link_set:
                 href = link.get('href')
                 if href:
-                    full_url = urljoin(base_url, href)
-                    parsed_url = urlparse(full_url)
+                    candidate = self._normalize_url(urljoin(base_url, href))
+                    parsed_url = urlparse(candidate)
                     
                     if (parsed_url.scheme in ['http', 'https'] and 
-                        parsed_url.netloc == base_domain and
-                        full_url not in self.visited_urls and
-                        self._is_valid_link(full_url)):
-                        links.append(full_url)
+                        self._is_same_site(candidate, base_url) and
+                        candidate not in self.visited_urls and
+                        self._is_valid_link(candidate)):
+                        links.append(candidate)
         
         return list(set(links))  # Remove duplicates
     
@@ -132,14 +182,16 @@ class WebScraper:
         if parsed.scheme in ['mailto', 'tel', 'javascript', 'ftp']:
             return False
         
-        # Skip common non-content paths
+        # Skip common non-content paths (keep this conservative)
         skip_paths = ['/login', '/register', '/cart', '/checkout', '/admin', '/wp-admin', 
-                     '/search', '/tag/', '/category/', '/author/', '/feed', '/rss']
+                     '/feed', '/rss']
         if any(skip_path in parsed.path.lower() for skip_path in skip_paths):
             return False
         
         # Skip URLs with query parameters that suggest dynamic content
-        if parsed.query and any(param in parsed.query.lower() for param in ['search', 'filter', 'sort', 'page=']):
+        # Allow common pagination/sorting to enable multi-level traversal
+        q = parsed.query.lower()
+        if q and (('search=' in q) or ('q=' in q) or ('filter=' in q)):
             return False
             
         return True
@@ -160,7 +212,8 @@ class WebScraper:
         self.scraped_count = 0
         
         results = []
-        urls_to_process = [(url, 0) for url in start_urls]  # (url, current_depth)
+        # Seed queue with normalized URLs
+        urls_to_process = [(self._normalize_url(url), 0) for url in start_urls]  # (url, current_depth)
         
         while urls_to_process and self.scraped_count < self.max_pages:
             current_url, current_depth = urls_to_process.pop(0)
@@ -189,8 +242,8 @@ class WebScraper:
                 result['links']):
                 
                 # Prioritize different types of links
-                nav_links = [link for link in result['links'] if any(word in link.lower() for word in ['about', 'service', 'product', 'contact'])]
-                content_links = [link for link in result['links'] if link not in nav_links]
+                nav_links = [self._normalize_url(link) for link in result['links'] if any(word in link.lower() for word in ['about', 'service', 'product', 'contact'])]
+                content_links = [self._normalize_url(link) for link in result['links'] if self._normalize_url(link) not in nav_links]
                 
                 # Add navigation links first (higher priority)
                 for link in nav_links[:3]:

@@ -25,6 +25,9 @@ class WebChatbot:
         
         self.scraped_content = []
         self.conversation_history = []
+        # Loop prevention controls
+        self._max_history_messages = 6  # messages to include in prompt (excludes system)
+        self._max_total_messages = 20   # cap stored history size
     
     def _test_api_key(self):
         """Test if the API key is valid"""
@@ -58,18 +61,24 @@ class WebChatbot:
     def ask_question(self, question: str) -> str:
         """Ask a question about the scraped content"""
         try:
+            # Prevent immediate repeat-question loops
+            if self.conversation_history:
+                recent_user = [m for m in self.conversation_history if m["role"] == "user"]
+                if recent_user and question.strip() == (recent_user[-1]["content"] or "").strip():
+                    return "⚠️ This question was just asked. Please rephrase or ask a different question."
+
             context = self._prepare_context()
             
             # Start with system message
             messages = [
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant that answers questions based on website content provided to you. Use only the information from the websites to answer questions. If the information is not available in the provided content, say so clearly."
+                    "content": "You are a helpful assistant that answers questions based on website content provided to you. Use only the information from the websites to answer questions. If the information is not available in the provided content, say so clearly. Do not repeat the user's question verbatim. Keep answers concise."
                 }
             ]
             
-            # Add conversation history BEFORE the current question (keep last 6 messages)
-            messages.extend(self.conversation_history[-6:])
+            # Add conversation history BEFORE the current question (keep last configured messages)
+            messages.extend(self.conversation_history[-self._max_history_messages:])
             
             # Add the current question with context
             messages.append({
@@ -84,11 +93,20 @@ class WebChatbot:
                 temperature=0.7
             )
             
-            answer = response.choices[0].message.content
+            answer = (response.choices[0].message.content or "").strip()
+
+            # Avoid echoing identical assistant reply as last message
+            last_assistant = [m for m in self.conversation_history if m["role"] == "assistant"]
+            if last_assistant and answer == (last_assistant[-1]["content"] or "").strip():
+                return "⚠️ I just provided this answer. Try refining your question or asking from a different angle."
             
             # Update conversation history AFTER getting the response
             self.conversation_history.append({"role": "user", "content": question})
             self.conversation_history.append({"role": "assistant", "content": answer})
+            
+            # Trim stored history to prevent unbounded growth
+            if len(self.conversation_history) > self._max_total_messages:
+                self.conversation_history = self.conversation_history[-self._max_total_messages:]
             
             return answer
             

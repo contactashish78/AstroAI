@@ -2,6 +2,7 @@ import streamlit as st
 from scraper import WebScraper
 from chatbot import WebChatbot
 import os
+from PyPDF2 import PdfReader
 
 # Page config
 st.set_page_config(
@@ -379,10 +380,59 @@ with st.sidebar:
     # URL input
     urls_input = st.text_area(
         "URLs to analyze:",
-        placeholder="https://example.com\nhttps://another-site.com\nhttps://news-site.com",
+        placeholder ="https://www.astropatri.come",
         height=100,
         help="Enter one URL per line. The scraper will analyze these websites and extract their content."
     )
+
+    # PDF upload
+    st.markdown("#### 📄 PDF Documents")
+    uploaded_pdfs = st.file_uploader(
+        "Upload PDF files to analyze",
+        type=["pdf"],
+        accept_multiple_files=True,
+        help="Uploaded PDFs will be parsed and included in the analysis and chat context."
+    )
+
+    def _parse_pdf_files(files):
+        parsed_items = []
+        for file in files:
+            try:
+                reader = PdfReader(file)
+                text_chunks = []
+                for page in reader.pages:
+                    try:
+                        text_chunks.append(page.extract_text() or "")
+                    except Exception:
+                        continue
+                full_text = "\n".join(text_chunks)
+                title = os.path.splitext(os.path.basename(file.name))[0]
+                parsed_items.append({
+                    'url': f"uploaded://{file.name}",
+                    'title': title,
+                    'content': full_text[:10000],
+                    'status': 'success'
+                })
+            except Exception as e:
+                parsed_items.append({
+                    'url': f"uploaded://{getattr(file, 'name', 'unknown')}",
+                    'title': 'PDF Parse Error',
+                    'content': '',
+                    'status': f'error: {str(e)}'
+                })
+        return parsed_items
+
+    if uploaded_pdfs:
+        if st.button("📥 Add Uploaded PDFs"):
+            with st.spinner("Parsing uploaded PDFs..."):
+                pdf_items = _parse_pdf_files(uploaded_pdfs)
+                # Merge into scraped_data
+                st.session_state.scraped_data = (st.session_state.scraped_data or []) + pdf_items
+                # Add to chatbot if available
+                if st.session_state.chatbot and st.session_state.api_key_valid:
+                    st.session_state.chatbot.add_scraped_content(st.session_state.scraped_data)
+                success_count = sum(1 for item in pdf_items if item['status'] == 'success')
+                st.success(f"Added {success_count}/{len(pdf_items)} PDF(s) to analysis.")
     
     # Scraping options
     with st.expander("🔧 Advanced Settings", expanded=False):
